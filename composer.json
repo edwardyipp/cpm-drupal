@@ -1,0 +1,82 @@
+{
+    "name": "edwardyipp/cpm-drupal",
+    "description": "Centre Point Medan — Drupal 11 headless CMS backend. Serves JSON:API content to the Next.js frontend at edwardyipp/cpm.",
+    "type": "project",
+    "license": "GPL-2.0-or-later",
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://packages.drupal.org/8"
+        }
+    ],
+    "require": {
+        "php": ">=8.3",
+        "composer/installers": "^2.3",
+        "drupal/core-composer-scaffold": "^11",
+        "drupal/core-project-message": "^11",
+        "drupal/core-recommended": "^11",
+        "drupal/admin_toolbar": "^3.5",
+        "drupal/focal_point": "^2.1",
+        "drupal/gin": "^4.0",
+        "drupal/jsonapi_extras": "^3.27",
+        "drupal/metatag": "^2.1",
+        "drupal/pathauto": "^1.13",
+        "drupal/scheduler": "^2.2",
+        "drupal/simple_oauth": "^6.0"
+    },
+    "require-dev": {
+        "drupal/core-dev": "^11",
+        "drush/drush": "^13"
+    },
+    "conflict": {
+        "drupal/drupal": "*"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "allow-plugins": {
+            "composer/installers": true,
+            "drupal/core-composer-scaffold": true,
+            "drupal/core-project-message": true,
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "phpstan/extension-installer": true,
+            "cweagans/composer-patches": true,
+            "php-http/discovery": true
+        },
+        "sort-packages": true
+    },
+    "extra": {
+        "drupal-scaffold": {
+            "locations": {
+                "web-root": "web/"
+            }
+        },
+        "installer-paths": {
+            "web/core": ["type:drupal-core"],
+            "web/libraries/{$name}": ["type:drupal-library"],
+            "web/modules/contrib/{$name}": ["type:drupal-module"],
+            "web/profiles/contrib/{$name}": ["type:drupal-profile"],
+            "web/themes/contrib/{$name}": ["type:drupal-theme"],
+            "drush/Commands/contrib/{$name}": ["type:drupal-drush"],
+            "web/modules/custom/{$name}": ["type:drupal-custom-module"],
+            "web/profiles/custom/{$name}": ["type:drupal-custom-profile"],
+            "web/themes/custom/{$name}": ["type:drupal-custom-theme"]
+        },
+        "drupal-core-project-message": {
+            "include-keys": ["homepage", "support"],
+            "post-create-project-cmd-message": [
+                "<bg=blue;fg=white>                                                         </>",
+                "<bg=blue;fg=white>  Centre Point Medan — Drupal 11 headless CMS backend.  </>",
+                "<bg=blue;fg=white>                                                         </>",
+                "",
+                "Next steps:",
+                "  1. Start DDEV: <comment>ddev start</comment>",
+                "  2. Install Drupal: <comment>ddev launch</comment> → follow web installer",
+                "  3. Enable JSON:API + contrib modules (see README)",
+                "",
+                "Frontend repo: <comment>edwardyipp/cpm</comment>",
+                "Architecture notes: <comment>../cpm/.claude/rules/cms-architecture.md</comment>"
+            ]
+        }
+    }
+}

@@ -1,0 +1,42 @@
+# --- Composer-managed artifacts (never commit) ---
+/vendor/
+/web/core/
+/web/libraries/
+/web/modules/contrib/
+/web/profiles/contrib/
+/web/themes/contrib/
+/drush/Commands/contrib/
+
+# --- Local environment secrets (never commit) ---
+/web/sites/default/settings.php
+/web/sites/default/settings.local.php
+/web/sites/default/services.yml
+/web/sites/*/files/
+/web/sites/*/private/
+.env
+.env.local
+.env.*.local
+
+# --- DDEV local state ---
+/.ddev/.homeadditions/
+/.ddev/commands/
+/.ddev/db_snapshots/
+/.ddev/.global_commands/
+/.ddev/config.*.yaml
+!/.ddev/config.yaml
+/.ddev/import.yaml
+/.ddev/providers/*.yaml
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- PHP tooling caches ---
+/.phpunit.result.cache
+/phpcs.xml
+/phpunit.xml
+/phpstan.neon

@@ -1,0 +1,83 @@
+name: Deploy to cPanel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, xml, gd, opcache, pdo_mysql, curl, zip, intl
+          tools: composer:v2
+          coverage: none
+
+      - name: Validate composer.json
+        run: composer validate --strict --no-check-publish
+
+      - name: Cache composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.composer/cache
+            vendor
+            web/core
+            web/modules/contrib
+            web/themes/contrib
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install dependencies
+        run: composer install --no-dev --optimize-autoloader --no-progress --prefer-dist
+
+      - name: Prepare deployable artifact
+        run: |
+          # Ensure web/sites/default exists with correct perms (Drupal will own settings.php on server).
+          mkdir -p web/sites/default
+          # Remove any local development-only files that shouldn't ship.
+          rm -rf .ddev .github .git
+          rm -f web/sites/default/settings.php web/sites/default/settings.local.php
+          rm -f .gitignore .gitattributes
+          # Keep settings.php.template — the server operator copies it once.
+
+      - name: Sync to cPanel via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          local-dir: ./
+          server-dir: /
+          # Don't touch runtime-owned directories on the server.
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            web/sites/default/settings.php
+            web/sites/default/settings.local.php
+            web/sites/default/files/**
+
+      - name: Post-deploy smoke check
+        run: |
+          # Wait a beat for FTP to settle, then curl the site.
+          sleep 10
+          curl -sSf -o /dev/null -w "HTTP %{http_code}\n" https://v3.centrepoint.co.id/ || {
+            echo "::warning::Smoke check failed — verify manually at v3.centrepoint.co.id"
+            exit 0
+          }

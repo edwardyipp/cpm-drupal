@@ -1,0 +1,58 @@
+<?php
+
+/**
+ * Template for web/sites/default/settings.php
+ *
+ * The real settings.php is generated per-environment (local DDEV, cPanel prod)
+ * and is NEVER committed. Copy this file to settings.php and fill in env values,
+ * OR — on DDEV — let Drupal's installer generate it and merge in the entries below.
+ *
+ * Secrets (DB creds, hash salt) come from environment variables only.
+ */
+
+// Database connection. On DDEV these defaults work out of the box.
+// On production cPanel, set the env vars in settings.local.php or via SetEnv.
+$databases['default']['default'] = [
+  'database' => getenv('DB_NAME') ?: 'db',
+  'username' => getenv('DB_USER') ?: 'db',
+  'password' => getenv('DB_PASSWORD') ?: 'db',
+  'prefix' => '',
+  'host' => getenv('DB_HOST') ?: 'db',
+  'port' => getenv('DB_PORT') ?: '3306',
+  'namespace' => 'Drupal\\mysql\\Driver\\Database\\mysql',
+  'driver' => 'mysql',
+];
+
+// Hash salt — must be set. Generate once and store in GitHub Secrets as DRUPAL_HASH_SALT.
+// NEVER hardcode a real value here.
+$settings['hash_salt'] = getenv('DRUPAL_HASH_SALT') ?: '';
+
+// Trust the reverse proxy headers cPanel forwards.
+$settings['reverse_proxy'] = TRUE;
+$settings['reverse_proxy_addresses'] = ['127.0.0.1'];
+
+// Files + config sync directory.
+$settings['file_public_path'] = 'sites/default/files';
+$settings['config_sync_directory'] = '../config/sync';
+
+// Protect against host-header injection. Set to the real hostnames in production.
+$settings['trusted_host_patterns'] = [
+  '^v3\.centrepoint\.co\.id$',
+  '^centrepoint\.co\.id$',
+  '^.+\.ddev\.site$',
+  '^localhost$',
+];
+
+// Production hardening (only apply when not in DDEV).
+if (getenv('IS_DDEV_PROJECT') !== 'true') {
+  // Disable update status notifications from the UI (handled by Composer + CI).
+  $config['update.settings']['notification']['emails'] = [];
+
+  // Lock down the admin user registration — only admins create accounts.
+  $config['user.settings']['register'] = 'admin_only';
+}
+
+// Load a local override if present (for per-environment tweaks).
+if (file_exists($app_root . '/' . $site_path . '/settings.local.php')) {
+  include $app_root . '/' . $site_path . '/settings.local.php';
+}
