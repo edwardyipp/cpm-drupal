@@ -13,8 +13,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     # First deploy uploads ~30k files (Drupal core + vendor) over single-host FTP — slow.
-    # Subsequent deploys only mirror diffs and finish in 1-2 minutes.
-    timeout-minutes: 90
+    # First-pass observed: ~50% in 90 min at parallel=3. Allow 4 hours so a single run
+    # can finish bootstrap. Subsequent deploys only mirror diffs and finish in 1-2 minutes
+    # (lftp skips files whose size+mtime already match on the server).
+    timeout-minutes: 240
 
     steps:
       - name: Checkout
