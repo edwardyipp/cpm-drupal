@@ -136,10 +136,19 @@ jobs:
           fi
           echo "Sync mode: TLS=$FTP_USE_TLS"
 
-          # `mirror -c` resumes partial transfers; `--ignore-time` skips when local
-          # and remote sizes match (composer install regenerates mtimes every run, so
-          # without --ignore-time lftp would re-upload every file even though contents
-          # are identical). Together: fast resume from a partial bootstrap.
+          # Composer-managed directories (vendor/, web/core/, contrib modules/themes)
+          # are uploaded ONCE via Cyberduck during initial bootstrap — they're too
+          # large for the host's plain-FTP rate (~3 files/sec) to deliver in any
+          # reasonable CI window. After bootstrap, this workflow only syncs the
+          # project's own code: composer manifests, custom modules/themes, scaffold
+          # config. Diffs typically finish in 1-2 minutes.
+          #
+          # If composer.lock changes (deps bumped), the diff between local builds
+          # surfaces in vendor/ — re-upload affected packages via Cyberduck before
+          # pushing, OR temporarily remove the exclusions for one run.
+          #
+          # `--ignore-time` skips when sizes match (composer regenerates mtimes
+          # every CI run); `-c` resumes any partial transfers.
           lftp \
             -u "$FTP_USERNAME" \
             --env-password \
@@ -153,10 +162,18 @@ jobs:
                 set net:timeout 60; \
                 set mirror:parallel-transfer-count 3; \
                 mirror -c --ignore-time --reverse --delete --parallel=3 \
+                  --exclude-glob vendor/ \
+                  --exclude-glob vendor/* \
+                  --exclude-glob web/core/ \
+                  --exclude-glob web/core/* \
+                  --exclude-glob web/modules/contrib/ \
+                  --exclude-glob web/modules/contrib/* \
+                  --exclude-glob web/themes/contrib/ \
+                  --exclude-glob web/themes/contrib/* \
                   --exclude-glob web/sites/default/settings.php \
                   --exclude-glob web/sites/default/settings.local.php \
-                  --exclude-glob web/sites/default/files/* \
                   --exclude-glob web/sites/default/files/ \
+                  --exclude-glob web/sites/default/files/* \
                   --verbose=1 \
                   ./ /; \
                 bye" \
