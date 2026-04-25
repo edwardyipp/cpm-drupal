@@ -60,12 +60,23 @@ jobs:
 
       - name: FTP connectivity smoke test
         env:
-          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_SERVER_RAW: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
-          # Single-connection auth + listing test so credential or TLS problems fail
-          # fast with a clear error, before we burn time on the mirror step.
+          # Strip any accidental ftp:// or ftps:// prefix and trailing slashes
+          # so the secret can be pasted in either form.
+          FTP_SERVER="${FTP_SERVER_RAW#ftp://}"
+          FTP_SERVER="${FTP_SERVER#ftps://}"
+          FTP_SERVER="${FTP_SERVER%/}"
+          if [ -z "$FTP_SERVER" ]; then
+            echo "::error::FTP_SERVER secret is empty after sanitisation."
+            exit 1
+          fi
+          echo "Resolved FTP host: $FTP_SERVER"
+          # Verify DNS resolves before lftp tries (clearer error than lftp's truncated form).
+          getent hosts "$FTP_SERVER" || { echo "::error::DNS lookup for $FTP_SERVER failed from the runner."; exit 1; }
+          # Single-connection auth + listing test so credential or TLS problems fail fast.
           lftp -e "
             set ssl:verify-certificate no;
             set ftp:ssl-allow yes;
@@ -75,11 +86,13 @@ jobs:
             open -u \"$FTP_USERNAME\",\"$FTP_PASSWORD\" \"ftp://$FTP_SERVER\";
             cls -1;
             bye
-          " || { echo "::error::FTP connection or auth failed — verify FTP_SERVER/FTP_USERNAME/FTP_PASSWORD secrets and that PHP 8.3 is set on the subdomain."; exit 1; }
+          " || { echo "::error::FTP auth or listing failed — verify FTP_USERNAME/FTP_PASSWORD secrets and that the FTP account exists on the server."; exit 1; }
+          # Export the sanitised value for the next step.
+          echo "FTP_SERVER=$FTP_SERVER" >> "$GITHUB_ENV"
 
       - name: Sync to cPanel via FTPS
         env:
-          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          # FTP_SERVER comes from the sanitised value exported by the smoke test step.
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
