@@ -83,33 +83,62 @@ jobs:
           # DNS pre-check — fails fast with a clear hostname (still masked, but message is explicit).
           getent hosts "$FTP_SERVER" >/dev/null || { echo "::error::DNS lookup for FTP_SERVER failed from the runner."; exit 1; }
 
-          # Connectivity test using lftp's command-line auth (NOT inline string).
-          # --env-password reads from $LFTP_PASSWORD so any special chars in the password
-          # (commas, dollars, backslashes, quotes) are passed through untouched.
-          lftp \
+          # Two-step probe: plain FTP first (isolates TLS), then explicit FTPS.
+          # Hard 90s wall via `timeout` so a stalled handshake can never hang the step.
+          # debug 3 shows the protocol exchange in the workflow log.
+          echo "==== Probe 1: plain FTP (no TLS) ===="
+          if timeout 90 lftp \
             -u "$FTP_USERNAME" \
             --env-password \
-            -e "set ssl:verify-certificate no; set ftp:ssl-allow yes; set ftp:ssl-protect-data false; set ftp:passive-mode true; set net:timeout 30; cls -1; bye" \
-            "ftp://$FTP_SERVER" \
-            || { echo "::error::FTP connect/auth/listing failed. Verify the credentials work in a desktop FTP client (Cyberduck/Finder Cmd+K) before re-running."; exit 1; }
+            -e "debug 3; set ssl:verify-certificate no; set ftp:ssl-allow no; set ftp:passive-mode true; set net:max-retries 1; set net:timeout 20; cls -1; bye" \
+            "ftp://$FTP_SERVER"; then
+            echo "::notice::Plain FTP probe OK"
+            FTP_USE_TLS="no"
+          else
+            rc=$?
+            echo "::warning::Plain FTP probe failed (exit $rc) — likely host firewall blocking the runner IP, or FTP not exposed"
+            FTP_USE_TLS="probe2"
+          fi
+
+          if [ "$FTP_USE_TLS" = "probe2" ] || [ -z "$FTP_USE_TLS" ]; then
+            echo "==== Probe 2: explicit FTPS (TLS on control channel) ===="
+            if timeout 90 lftp \
+              -u "$FTP_USERNAME" \
+              --env-password \
+              -e "debug 3; set ssl:verify-certificate no; set ftp:ssl-allow yes; set ftp:ssl-force true; set ftp:ssl-protect-data false; set ftp:passive-mode true; set net:max-retries 1; set net:timeout 20; cls -1; bye" \
+              "ftp://$FTP_SERVER"; then
+              echo "::notice::Explicit FTPS probe OK"
+              FTP_USE_TLS="yes"
+            else
+              rc=$?
+              echo "::error::Both plain FTP and FTPS failed (FTPS exit $rc). Likely host firewall blocking GitHub Actions runner IPs. See workflow notes for next steps."
+              exit 1
+            fi
+          fi
 
           echo "FTP_SERVER=$FTP_SERVER" >> "$GITHUB_ENV"
+          echo "FTP_USE_TLS=$FTP_USE_TLS" >> "$GITHUB_ENV"
 
-      - name: Sync to cPanel via FTPS
+      - name: Sync to cPanel
         env:
-          # FTP_SERVER comes from the sanitised value exported by the smoke test step.
+          # FTP_SERVER + FTP_USE_TLS come from the smoke test step.
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           # parallel=3 stays under typical shared-cPanel FTP per-account caps (4-8).
-          # --env-password reads $LFTP_PASSWORD so special chars in the password
-          # don't break shell quoting. URL goes as a CLI arg, not embedded in script.
+          # FTP_USE_TLS is "yes" or "no" — chosen by the smoke test based on what worked.
+          if [ "$FTP_USE_TLS" = "yes" ]; then
+            SSL_OPTS="set ftp:ssl-allow yes; set ftp:ssl-force true; set ftp:ssl-protect-data false;"
+          else
+            SSL_OPTS="set ftp:ssl-allow no;"
+          fi
+          echo "Sync mode: TLS=$FTP_USE_TLS"
+
           lftp \
             -u "$FTP_USERNAME" \
             --env-password \
             -e "set ssl:verify-certificate no; \
-                set ftp:ssl-allow yes; \
-                set ftp:ssl-protect-data false; \
+                $SSL_OPTS \
                 set ftp:passive-mode true; \
                 set net:max-retries 10; \
                 set net:reconnect-interval-base 5; \
